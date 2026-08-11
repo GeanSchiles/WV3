@@ -17,6 +17,11 @@ export default function NavLinks({ perfil }: { perfil: PerfilUsuario }) {
       label: 'Empresas Transportadoras',
       show: perfil === 'administrador' || perfil === 'analista',
     },
+    {
+      href: '/administracao',
+      label: 'Administração',
+      show: perfil === 'administrador',
+    },
   ].filter((i) => i.show);
 
   return (
