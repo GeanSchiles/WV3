@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 
 export default function LoginPage() {
@@ -56,7 +57,7 @@ export default function LoginPage() {
             />
           </div>
 
-          <div className="mb-5">
+          <div className="mb-2">
             <label className="label" htmlFor="senha">Senha</label>
             <input
               id="senha"
@@ -68,6 +69,12 @@ export default function LoginPage() {
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
             />
+          </div>
+
+          <div className="mb-5 text-right">
+            <Link href="/esqueci-senha" className="text-xs text-accent hover:underline">
+              Esqueci minha senha
+            </Link>
           </div>
 
           {erro && (
