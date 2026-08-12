@@ -22,6 +22,11 @@ export default function NavLinks({ perfil }: { perfil: PerfilUsuario }) {
       label: 'Administração',
       show: perfil === 'administrador',
     },
+    {
+      href: '/financeiro',
+      label: 'Financeiro',
+      show: perfil === 'administrador' || perfil === 'gestor',
+    },
   ].filter((i) => i.show);
 
   return (

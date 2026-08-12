@@ -4,6 +4,7 @@ export type StatusServico = 'aguardando' | 'concluido' | 'cancelada';
 export type TipoMotorista = 'frota' | 'terceiros' | 'agregado' | 'motorista_px';
 export type OrigemSolicitacao = 'transportadora' | 'organizacao';
 export type TipoRastreamento = 'rastreada' | 'nao_rastreada';
+export type TipoValorServico = 'viagem' | 'extra';
 
 export interface Profile {
   id: string;
@@ -25,6 +26,16 @@ export interface EmpresaTransportadora {
   responsavel: string | null;
   telefone_responsavel: string | null;
   gerenciadora_risco: string | null;
+  created_at: string;
+}
+
+export interface FinanceiroFaixa {
+  id: string;
+  empresa_id: string;
+  tipo_servico: TipoValorServico;
+  valor_de: number;
+  valor_ate: number | null;
+  valor_cobrado: number;
   created_at: string;
 }
 
