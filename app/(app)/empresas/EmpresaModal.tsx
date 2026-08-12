@@ -31,6 +31,9 @@ export default function EmpresaModal({ empresa, onClose, onSalvo }: Props) {
   const [responsavel, setResponsavel] = useState(empresa?.responsavel ?? '');
   const [telefoneResponsavel, setTelefoneResponsavel] = useState(empresa?.telefone_responsavel ?? '');
   const [gerenciadoraRisco, setGerenciadoraRisco] = useState(empresa?.gerenciadora_risco ?? '');
+  const [logoUrl, setLogoUrl] = useState(empresa?.logo_url ?? '');
+  const [arquivoLogo, setArquivoLogo] = useState<File | null>(null);
+  const [enviandoLogo, setEnviandoLogo] = useState(false);
 
   const [tiposContratacao, setTiposContratacao] = useState<TipoMotorista[]>([]);
   const [mercadoriaGeral, setMercadoriaGeral] = useState(false);
@@ -101,6 +104,39 @@ export default function EmpresaModal({ empresa, onClose, onSalvo }: Props) {
       empresaId = data.id;
     }
 
+    // Upload da logo, se um arquivo novo foi selecionado
+    if (arquivoLogo && empresaId) {
+      setEnviandoLogo(true);
+      const extensao = arquivoLogo.name.split('.').pop();
+      const caminho = `${empresaId}/logo-${Date.now()}.${extensao}`;
+
+      const { error: erroUpload } = await supabase.storage
+        .from('logos-empresas')
+        .upload(caminho, arquivoLogo, { upsert: true });
+
+      if (erroUpload) {
+        setEnviandoLogo(false);
+        setSalvando(false);
+        setErro('Empresa salva, mas houve erro ao enviar a logo: ' + erroUpload.message);
+        return;
+      }
+
+      const { data: publicUrlData } = supabase.storage.from('logos-empresas').getPublicUrl(caminho);
+
+      const { error: erroLogoUrl } = await supabase
+        .from('empresas_transportadoras')
+        .update({ logo_url: publicUrlData.publicUrl })
+        .eq('id', empresaId);
+
+      setEnviandoLogo(false);
+
+      if (erroLogoUrl) {
+        setSalvando(false);
+        setErro('Empresa salva, mas houve erro ao vincular a logo: ' + erroLogoUrl.message);
+        return;
+      }
+    }
+
     const faixasValidas = faixas.filter((f) => f.valor_de !== '');
     if (faixasValidas.length > 0) {
       const { data: apolice, error: erroApolice } = await supabase
@@ -154,6 +190,27 @@ export default function EmpresaModal({ empresa, onClose, onSalvo }: Props) {
         <form onSubmit={handleSubmit} className="space-y-6">
           <section className="space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-base-400">Dados da empresa</h3>
+
+            <div>
+              <label className="label">Logo da empresa</label>
+              <div className="flex items-center gap-3">
+                {(arquivoLogo || logoUrl) && (
+                  <img
+                    src={arquivoLogo ? URL.createObjectURL(arquivoLogo) : logoUrl}
+                    alt="Logo"
+                    className="h-14 w-14 rounded-md object-cover"
+                  />
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="input"
+                  onChange={(e) => setArquivoLogo(e.target.files?.[0] ?? null)}
+                />
+              </div>
+              {enviandoLogo && <p className="mt-1 text-[11px] text-base-400">Enviando logo…</p>}
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">Nome da empresa</label>

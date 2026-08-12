@@ -61,9 +61,20 @@ export default function EmpresasLista({
             }}
             className="card p-4 text-left hover:border-accent/50"
           >
-            <p className="font-medium text-base-100">{e.nome}</p>
-            <p className="mt-0.5 text-xs text-base-400">{e.cnpj}</p>
-            <p className="mt-2 text-xs text-base-300">Responsável: {e.responsavel ?? '—'}</p>
+            <div className="mb-2 flex items-center gap-3">
+              {e.logo_url ? (
+                <img src={e.logo_url} alt={e.nome} className="h-10 w-10 rounded-md object-cover" />
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-base-700 text-xs text-base-400">
+                  {e.nome.slice(0, 2).toUpperCase()}
+                </div>
+              )}
+              <div>
+                <p className="font-medium text-base-100">{e.nome}</p>
+                <p className="text-xs text-base-400">{e.cnpj}</p>
+              </div>
+            </div>
+            <p className="text-xs text-base-300">Responsável: {e.responsavel ?? '—'}</p>
           </button>
         ))}
         {filtradas.length === 0 && (

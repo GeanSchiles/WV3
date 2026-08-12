@@ -26,6 +26,7 @@ export interface EmpresaTransportadora {
   responsavel: string | null;
   telefone_responsavel: string | null;
   gerenciadora_risco: string | null;
+  logo_url: string | null;
   created_at: string;
 }
 

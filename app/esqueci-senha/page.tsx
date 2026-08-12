@@ -36,9 +36,7 @@ export default function EsqueciSenhaPage() {
     <div className="flex min-h-screen items-center justify-center bg-base-950 px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-md bg-accent/15 text-accent font-mono text-lg font-bold">
-            W3
-          </div>
+          <img src="/logo-wv3.png" alt="WV3" className="mx-auto mb-3 h-16 w-16 rounded-full" />
           <h1 className="text-lg font-semibold text-base-100">Recuperar senha</h1>
           <p className="mt-1 text-sm text-base-300">
             Informe seu e-mail e enviaremos um link para redefinir a senha.

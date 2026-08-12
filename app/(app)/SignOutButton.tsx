@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
-export default function SignOutButton() {
+export default function SignOutButton({ recolhido }: { recolhido?: boolean }) {
   const router = useRouter();
   const supabase = createClient();
 
@@ -14,8 +14,12 @@ export default function SignOutButton() {
   }
 
   return (
-    <button onClick={handleSignOut} className="btn-ghost w-full text-xs">
-      Sair
+    <button
+      onClick={handleSignOut}
+      title={recolhido ? 'Sair' : undefined}
+      className="btn-ghost w-full text-xs"
+    >
+      {recolhido ? '⏻' : 'Sair'}
     </button>
   );
 }
