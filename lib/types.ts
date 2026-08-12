@@ -44,6 +44,8 @@ export interface Solicitacao {
   tipo: TipoServico;
   empresa_id: string;
   empresa?: { nome: string };
+  analista_id: string | null;
+  analista?: { nome: string } | null;
   cliente_final: string | null;
   data_coleta: string | null;
   data_entrega: string | null;

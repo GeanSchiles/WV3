@@ -31,6 +31,11 @@ export default function AtendimentoDrawer({ solicitacao, onClose, onAtualizado }
 
     const payload: Record<string, unknown> = {};
 
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) payload.analista_id = user.id;
+
     if (solicitacao.tipo === 'viagem') {
       payload.viagem_liberada = viagemLiberada;
       payload.numero_sm = numeroSm || null;
