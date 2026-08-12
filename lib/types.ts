@@ -30,6 +30,16 @@ export interface EmpresaTransportadora {
   created_at: string;
 }
 
+export interface TabelaServico {
+  id: string;
+  empresa_id: string;
+  nome: string;
+  valor: number;
+  created_at: string;
+}
+
+export const SERVICOS_PADRAO = ['Viagem', 'Isca', 'Consulta', 'Escolta'];
+
 export interface FinanceiroFaixa {
   id: string;
   empresa_id: string;

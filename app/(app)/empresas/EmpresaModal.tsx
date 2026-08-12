@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { EmpresaTransportadora, TipoMotorista } from '@/lib/types';
+import { EmpresaTransportadora, TipoMotorista, SERVICOS_PADRAO } from '@/lib/types';
+import TabelaServicosModal, { LinhaServico } from './TabelaServicosModal';
 
 interface Faixa {
   valor_de: string;
@@ -42,8 +43,41 @@ export default function EmpresaModal({ empresa, onClose, onSalvo }: Props) {
     { valor_de: '0', valor_ate: '', tipo_rastreamento: 'nao_rastreada' },
   ]);
 
+  const [servicos, setServicos] = useState<LinhaServico[]>(
+    SERVICOS_PADRAO.map((nome) => ({ nome, valor: '', padrao: true }))
+  );
+  const [modalServicosAberto, setModalServicosAberto] = useState(false);
+
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+
+  useEffect(() => {
+    if (!empresa) return;
+    (async () => {
+      const { data } = await supabase
+        .from('tabela_servicos')
+        .select('*')
+        .eq('empresa_id', empresa.id)
+        .order('created_at');
+
+      if (data && data.length > 0) {
+        const doBanco: LinhaServico[] = data.map((s) => ({
+          id: s.id,
+          nome: s.nome,
+          valor: String(s.valor),
+          padrao: SERVICOS_PADRAO.includes(s.nome),
+        }));
+        // garante que os serviços padrão apareçam mesmo que ainda não tenham sido cadastrados
+        SERVICOS_PADRAO.forEach((nome) => {
+          if (!doBanco.some((s) => s.nome === nome)) {
+            doBanco.unshift({ nome, valor: '', padrao: true });
+          }
+        });
+        setServicos(doBanco);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresa?.id]);
 
   function atualizarFaixa(i: number, campo: keyof Faixa, valor: string) {
     setFaixas((prev) => prev.map((f, idx) => (idx === i ? { ...f, [campo]: valor } : f)));
@@ -137,6 +171,33 @@ export default function EmpresaModal({ empresa, onClose, onSalvo }: Props) {
       }
     }
 
+    // Tabela de serviços — substitui os valores cadastrados pelo conjunto atual
+    const servicosValidos = servicos.filter((s) => s.nome.trim() !== '' && s.valor !== '');
+    if (servicosValidos.length > 0 && empresaId) {
+      const { error: erroDeleteServicos } = await supabase
+        .from('tabela_servicos')
+        .delete()
+        .eq('empresa_id', empresaId);
+      if (erroDeleteServicos) {
+        setSalvando(false);
+        setErro('Empresa salva, mas houve erro ao salvar a tabela de serviços: ' + erroDeleteServicos.message);
+        return;
+      }
+
+      const { error: erroServicos } = await supabase.from('tabela_servicos').insert(
+        servicosValidos.map((s) => ({
+          empresa_id: empresaId,
+          nome: s.nome.trim(),
+          valor: Number(s.valor),
+        }))
+      );
+      if (erroServicos) {
+        setSalvando(false);
+        setErro('Empresa salva, mas houve erro ao salvar a tabela de serviços: ' + erroServicos.message);
+        return;
+      }
+    }
+
     const faixasValidas = faixas.filter((f) => f.valor_de !== '');
     if (faixasValidas.length > 0) {
       const { data: apolice, error: erroApolice } = await supabase
@@ -182,9 +243,28 @@ export default function EmpresaModal({ empresa, onClose, onSalvo }: Props) {
           <h2 className="text-base font-semibold text-base-100">
             {empresa ? 'Editar empresa' : 'Nova empresa transportadora'}
           </h2>
-          <button onClick={onClose} className="text-base-400 hover:text-base-100">
-            ✕
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setModalServicosAberto(true)}
+              title="Tabela de Serviços"
+              className="flex items-center gap-1.5 rounded-sm border border-base-600 px-2.5 py-1.5 text-xs text-base-300 hover:border-accent/50 hover:text-accent"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="M3 9h18M9 9v11" />
+              </svg>
+              Tabela de Serviços
+              {servicos.some((s) => s.valor !== '') && (
+                <span className="ml-0.5 rounded-full bg-accent/15 px-1.5 text-[10px] text-accent">
+                  {servicos.filter((s) => s.valor !== '').length}
+                </span>
+              )}
+            </button>
+            <button onClick={onClose} className="text-base-400 hover:text-base-100">
+              ✕
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -363,6 +443,18 @@ export default function EmpresaModal({ empresa, onClose, onSalvo }: Props) {
           </div>
         </form>
       </div>
+
+      {modalServicosAberto && (
+        <TabelaServicosModal
+          nomeEmpresa={nome || 'Nova empresa'}
+          servicos={servicos}
+          onFechar={() => setModalServicosAberto(false)}
+          onSalvar={(novosServicos) => {
+            setServicos(novosServicos);
+            setModalServicosAberto(false);
+          }}
+        />
+      )}
     </div>
   );
 }
