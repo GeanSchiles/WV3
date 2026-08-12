@@ -20,7 +20,7 @@ export default async function AdministracaoPage() {
   const { data: usuarios } = await supabase
     .from('profiles')
     .select('*')
-    .in('perfil', ['administrador', 'analista'])
+    .in('perfil', ['administrador', 'analista', 'gestor', 'operacional'])
     .order('nome');
 
   const { data: empresas } = await supabase
@@ -33,9 +33,10 @@ export default async function AdministracaoPage() {
   return (
     <div className="p-6">
       <header className="mb-6">
-        <h1 className="text-xl font-semibold text-base-100">Administração e Analistas</h1>
+        <h1 className="text-xl font-semibold text-base-100">Administração e Usuários</h1>
         <p className="text-sm text-base-300">
-          Cadastro de usuários da Organização e vínculo de empresas transportadoras a cada analista.
+          Cadastro de usuários da Organização (Administrador/Analista) e das Empresas Transportadoras
+          (Gestor/Operacional).
         </p>
       </header>
 

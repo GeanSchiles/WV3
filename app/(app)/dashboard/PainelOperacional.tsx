@@ -8,6 +8,7 @@ import {
   STATUS_LABEL,
   StatusServico,
   TipoServico,
+  PerfilUsuario,
 } from '@/lib/types';
 import NovaSolicitacaoModal from './NovaSolicitacaoModal';
 import AtendimentoDrawer from './AtendimentoDrawer';
@@ -15,9 +16,10 @@ import AtendimentoDrawer from './AtendimentoDrawer';
 interface Props {
   solicitacoesIniciais: Solicitacao[];
   empresas: { id: string; nome: string }[];
+  perfil: PerfilUsuario;
 }
 
-export default function PainelOperacional({ solicitacoesIniciais, empresas }: Props) {
+export default function PainelOperacional({ solicitacoesIniciais, empresas, perfil }: Props) {
   const supabase = createClient();
   const [solicitacoes, setSolicitacoes] = useState(solicitacoesIniciais);
   const [modalAberto, setModalAberto] = useState(false);
@@ -178,6 +180,7 @@ export default function PainelOperacional({ solicitacoesIniciais, empresas }: Pr
       {modalAberto && (
         <NovaSolicitacaoModal
           empresas={empresas}
+          perfil={perfil}
           onClose={() => setModalAberto(false)}
           onCriado={() => {
             setModalAberto(false);
@@ -189,6 +192,7 @@ export default function PainelOperacional({ solicitacoesIniciais, empresas }: Pr
       {selecionada && (
         <AtendimentoDrawer
           solicitacao={selecionada}
+          perfil={perfil}
           onClose={() => setSelecionada(null)}
           onAtualizado={() => {
             setSelecionada(null);

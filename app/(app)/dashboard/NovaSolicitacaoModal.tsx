@@ -5,12 +5,14 @@ import { createClient } from '@/lib/supabase/client';
 import {
   TipoServico,
   TipoMotorista,
+  PerfilUsuario,
   anexosObrigatoriosViagem,
   ANEXOS_CONSULTA,
 } from '@/lib/types';
 
 interface Props {
   empresas: { id: string; nome: string }[];
+  perfil: PerfilUsuario;
   onClose: () => void;
   onCriado: () => void;
 }
@@ -22,10 +24,15 @@ const TIPOS: { value: TipoServico; label: string }[] = [
   { value: 'isca', label: 'Isca' },
 ];
 
-export default function NovaSolicitacaoModal({ empresas, onClose, onCriado }: Props) {
+export default function NovaSolicitacaoModal({ empresas, perfil, onClose, onCriado }: Props) {
+  const ehTransportadora = perfil === 'gestor' || perfil === 'operacional';
+  const tiposDisponiveis = ehTransportadora
+    ? TIPOS.filter((t) => t.value === 'viagem' || t.value === 'consulta')
+    : TIPOS;
+
   const supabase = createClient();
   const [tipo, setTipo] = useState<TipoServico>('viagem');
-  const [empresaId, setEmpresaId] = useState('');
+  const [empresaId, setEmpresaId] = useState(ehTransportadora && empresas.length > 0 ? empresas[0].id : '');
   const [clienteFinal, setClienteFinal] = useState('');
   const [dataColeta, setDataColeta] = useState('');
   const [dataEntrega, setDataEntrega] = useState('');
@@ -62,7 +69,7 @@ export default function NovaSolicitacaoModal({ empresas, onClose, onCriado }: Pr
       tipo,
       empresa_id: empresaId,
       cliente_final: clienteFinal || null,
-      origem: 'organizacao',
+      origem: ehTransportadora ? 'transportadora' : 'organizacao',
     };
 
     if (tipo === 'viagem') {
@@ -107,7 +114,7 @@ export default function NovaSolicitacaoModal({ empresas, onClose, onCriado }: Pr
           <div>
             <label className="label">Tipo de serviço</label>
             <div className="grid grid-cols-2 gap-2">
-              {TIPOS.map((t) => (
+              {tiposDisponiveis.map((t) => (
                 <button
                   type="button"
                   key={t.value}
@@ -126,14 +133,18 @@ export default function NovaSolicitacaoModal({ empresas, onClose, onCriado }: Pr
 
           <div>
             <label className="label">Empresa transportadora</label>
-            <select className="input" value={empresaId} onChange={(e) => setEmpresaId(e.target.value)}>
-              <option value="">Selecione…</option>
-              {empresas.map((emp) => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.nome}
-                </option>
-              ))}
-            </select>
+            {ehTransportadora ? (
+              <input className="input opacity-60" value={empresas[0]?.nome ?? ''} disabled />
+            ) : (
+              <select className="input" value={empresaId} onChange={(e) => setEmpresaId(e.target.value)}>
+                <option value="">Selecione…</option>
+                {empresas.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.nome}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           {(tipo === 'viagem' || tipo === 'consulta') && (

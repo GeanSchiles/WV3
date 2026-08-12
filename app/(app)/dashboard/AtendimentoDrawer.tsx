@@ -2,15 +2,17 @@
 
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Solicitacao, TIPO_SERVICO_LABEL, STATUS_LABEL } from '@/lib/types';
+import { Solicitacao, TIPO_SERVICO_LABEL, STATUS_LABEL, PerfilUsuario } from '@/lib/types';
 
 interface Props {
   solicitacao: Solicitacao;
+  perfil: PerfilUsuario;
   onClose: () => void;
   onAtualizado: () => void;
 }
 
-export default function AtendimentoDrawer({ solicitacao, onClose, onAtualizado }: Props) {
+export default function AtendimentoDrawer({ solicitacao, perfil, onClose, onAtualizado }: Props) {
+  const ehTransportadora = perfil === 'gestor' || perfil === 'operacional';
   const supabase = createClient();
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -120,7 +122,7 @@ export default function AtendimentoDrawer({ solicitacao, onClose, onAtualizado }
           />
         </div>
 
-        {solicitacao.status !== 'cancelada' && (
+        {!ehTransportadora && solicitacao.status !== 'cancelada' && (
           <div className="space-y-4">
             {solicitacao.tipo === 'viagem' && (
               <>
@@ -209,6 +211,34 @@ export default function AtendimentoDrawer({ solicitacao, onClose, onAtualizado }
               </div>
             </div>
           </div>
+        )}
+
+        {ehTransportadora && solicitacao.status === 'concluido' && (
+          <div className="space-y-2 rounded-md border border-base-700 bg-base-800 p-4 text-sm">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-base-400">
+              Resposta da Organização
+            </p>
+            {solicitacao.tipo === 'viagem' && (
+              <>
+                <Info label="Viagem liberada" value={solicitacao.viagem_liberada ? 'Sim' : 'Não'} />
+                <Info label="Número da SM" value={solicitacao.numero_sm ?? '—'} />
+              </>
+            )}
+            {solicitacao.tipo === 'consulta' && (
+              <>
+                <Info label="Resultado" value={solicitacao.consulta_aprovada ? 'Aprovado' : 'Reprovado'} />
+                <Info label="Motivo" value={solicitacao.consulta_motivo ?? '—'} />
+              </>
+            )}
+            {solicitacao.tipo === 'escolta' && (
+              <Info label="Empresa da escolta" value={solicitacao.escolta_empresa ?? '—'} />
+            )}
+            {solicitacao.tipo === 'isca' && <Info label="Número da isca" value={solicitacao.isca_numero ?? '—'} />}
+          </div>
+        )}
+
+        {ehTransportadora && solicitacao.status === 'aguardando' && (
+          <p className="text-sm text-base-400">Aguardando atendimento da Organização.</p>
         )}
 
         {solicitacao.status === 'cancelada' && (

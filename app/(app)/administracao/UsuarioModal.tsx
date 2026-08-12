@@ -11,6 +11,13 @@ interface Props {
   onSalvo: () => void;
 }
 
+const PERFIS: { value: PerfilUsuario; label: string }[] = [
+  { value: 'administrador', label: 'Administrador' },
+  { value: 'analista', label: 'Analista' },
+  { value: 'gestor', label: 'Gestor (Transportadora)' },
+  { value: 'operacional', label: 'Operacional (Transportadora)' },
+];
+
 export default function UsuarioModal({ usuario, empresas, empresasVinculadasIds, onClose, onSalvo }: Props) {
   const editando = !!usuario;
 
@@ -23,12 +30,16 @@ export default function UsuarioModal({ usuario, empresas, empresasVinculadasIds,
   const [perfil, setPerfil] = useState<PerfilUsuario>(usuario?.perfil ?? 'analista');
   const [senha, setSenha] = useState('');
   const [empresasSelecionadas, setEmpresasSelecionadas] = useState<string[]>(empresasVinculadasIds);
+  const [empresaTransportadoraId, setEmpresaTransportadoraId] = useState(
+    usuario?.empresa_transportadora_id ?? ''
+  );
   const [buscaEmpresa, setBuscaEmpresa] = useState('');
 
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
   const empresasFiltradas = empresas.filter((e) => e.nome.toLowerCase().includes(buscaEmpresa.toLowerCase()));
+  const ehTransportadora = perfil === 'gestor' || perfil === 'operacional';
 
   function toggleEmpresa(id: string) {
     setEmpresasSelecionadas((prev) => {
@@ -58,6 +69,10 @@ export default function UsuarioModal({ usuario, empresas, empresasVinculadasIds,
       setErro('A senha precisa ter pelo menos 6 caracteres.');
       return;
     }
+    if (ehTransportadora && !empresaTransportadoraId) {
+      setErro('Selecione a empresa transportadora deste usuário.');
+      return;
+    }
 
     setSalvando(true);
 
@@ -73,7 +88,8 @@ export default function UsuarioModal({ usuario, empresas, empresasVinculadasIds,
             telefone,
             endereco,
             funcao,
-            empresaIds: perfil === 'analista' ? empresasSelecionadas : [],
+            empresaIds: perfil === 'analista' ? empresasSelecionadas : undefined,
+            empresaTransportadoraId: ehTransportadora ? empresaTransportadoraId : null,
           }),
         });
         const data = await res.json();
@@ -92,6 +108,7 @@ export default function UsuarioModal({ usuario, empresas, empresasVinculadasIds,
             perfil,
             senha,
             empresaIds: perfil === 'analista' ? empresasSelecionadas : [],
+            empresaTransportadoraId: ehTransportadora ? empresaTransportadoraId : null,
           }),
         });
         const data = await res.json();
@@ -122,28 +139,19 @@ export default function UsuarioModal({ usuario, empresas, empresasVinculadasIds,
           <div>
             <label className="label">Perfil de acesso</label>
             <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                disabled={editando}
-                onClick={() => setPerfil('administrador')}
-                className={`rounded-md border px-3 py-2 text-sm disabled:opacity-50 ${
-                  perfil === 'administrador'
-                    ? 'border-accent bg-accent/10 text-accent'
-                    : 'border-base-600 text-base-300'
-                }`}
-              >
-                Administrador
-              </button>
-              <button
-                type="button"
-                disabled={editando}
-                onClick={() => setPerfil('analista')}
-                className={`rounded-md border px-3 py-2 text-sm disabled:opacity-50 ${
-                  perfil === 'analista' ? 'border-accent bg-accent/10 text-accent' : 'border-base-600 text-base-300'
-                }`}
-              >
-                Analista
-              </button>
+              {PERFIS.map((p) => (
+                <button
+                  key={p.value}
+                  type="button"
+                  disabled={editando}
+                  onClick={() => setPerfil(p.value)}
+                  className={`rounded-md border px-3 py-2 text-sm disabled:opacity-50 ${
+                    perfil === p.value ? 'border-accent bg-accent/10 text-accent' : 'border-base-600 text-base-300'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -197,6 +205,29 @@ export default function UsuarioModal({ usuario, empresas, empresasVinculadasIds,
               />
               <p className="mt-1 text-[11px] text-base-400">
                 Repasse essa senha ao usuário. Ele pode trocá-la depois em "Esqueci minha senha".
+              </p>
+            </div>
+          )}
+
+          {ehTransportadora && (
+            <div>
+              <label className="label">Empresa transportadora</label>
+              <select
+                className="input"
+                value={empresaTransportadoraId}
+                onChange={(e) => setEmpresaTransportadoraId(e.target.value)}
+              >
+                <option value="">Selecione…</option>
+                {empresas.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.nome}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-base-400">
+                {perfil === 'gestor'
+                  ? 'Gestor tem acesso ao Painel Operacional, Relatórios e Financeiro dessa empresa.'
+                  : 'Operacional tem acesso apenas ao Painel Operacional e Relatórios Operacionais dessa empresa.'}
               </p>
             </div>
           )}

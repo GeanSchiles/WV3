@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { nome, cpf, telefone, email, endereco, funcao, perfil, senha, empresaIds } = body;
+  const { nome, cpf, telefone, email, endereco, funcao, perfil, senha, empresaIds, empresaTransportadoraId } = body;
 
   if (!nome || !email || !senha || !perfil) {
     return NextResponse.json({ error: 'Preencha nome, e-mail, senha e perfil.' }, { status: 400 });
@@ -35,6 +35,10 @@ export async function POST(request: Request) {
 
   if (empresaIds && empresaIds.length > 50) {
     return NextResponse.json({ error: 'Um analista pode ter no máximo 50 empresas vinculadas.' }, { status: 400 });
+  }
+
+  if ((perfil === 'gestor' || perfil === 'operacional') && !empresaTransportadoraId) {
+    return NextResponse.json({ error: 'Selecione a empresa transportadora deste usuário.' }, { status: 400 });
   }
 
   const admin = createAdminClient();
@@ -58,6 +62,8 @@ export async function POST(request: Request) {
     endereco: endereco || null,
     funcao: funcao || null,
     perfil,
+    empresa_transportadora_id:
+      perfil === 'gestor' || perfil === 'operacional' ? empresaTransportadoraId : null,
   });
 
   if (erroProfile) {
@@ -91,7 +97,7 @@ export async function PATCH(request: Request) {
   }
 
   const body = await request.json();
-  const { userId, nome, cpf, telefone, endereco, funcao, empresaIds } = body;
+  const { userId, nome, cpf, telefone, endereco, funcao, empresaIds, empresaTransportadoraId } = body;
 
   if (!userId) {
     return NextResponse.json({ error: 'userId é obrigatório.' }, { status: 400 });
@@ -103,16 +109,19 @@ export async function PATCH(request: Request) {
 
   const admin = createAdminClient();
 
-  const { error: erroProfile } = await admin
-    .from('profiles')
-    .update({
-      nome,
-      cpf: cpf || null,
-      telefone: telefone || null,
-      endereco: endereco || null,
-      funcao: funcao || null,
-    })
-    .eq('id', userId);
+  const dadosAtualizacao: Record<string, unknown> = {
+    nome,
+    cpf: cpf || null,
+    telefone: telefone || null,
+    endereco: endereco || null,
+    funcao: funcao || null,
+  };
+
+  if (empresaTransportadoraId !== undefined) {
+    dadosAtualizacao.empresa_transportadora_id = empresaTransportadoraId || null;
+  }
+
+  const { error: erroProfile } = await admin.from('profiles').update(dadosAtualizacao).eq('id', userId);
 
   if (erroProfile) {
     return NextResponse.json({ error: erroProfile.message }, { status: 400 });

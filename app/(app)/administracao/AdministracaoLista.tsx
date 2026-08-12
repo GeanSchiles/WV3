@@ -31,6 +31,14 @@ export default function AdministracaoLista({ usuariosIniciais, empresas, vinculo
     return mapa;
   }, [vinculos]);
 
+  const nomeEmpresaPorId = useMemo(() => {
+    const mapa: Record<string, string> = {};
+    empresas.forEach((e) => {
+      mapa[e.id] = e.nome;
+    });
+    return mapa;
+  }, [empresas]);
+
   const filtrados = useMemo(
     () =>
       usuarios.filter((u) => {
@@ -57,6 +65,8 @@ export default function AdministracaoLista({ usuariosIniciais, empresas, vinculo
           <option value="todos">Todos os perfis</option>
           <option value="administrador">Administrador</option>
           <option value="analista">Analista</option>
+          <option value="gestor">Gestor</option>
+          <option value="operacional">Operacional</option>
         </select>
 
         <input
@@ -85,7 +95,7 @@ export default function AdministracaoLista({ usuariosIniciais, empresas, vinculo
               <th className="px-4 py-3 font-medium">E-mail</th>
               <th className="px-4 py-3 font-medium">Perfil</th>
               <th className="px-4 py-3 font-medium">Função</th>
-              <th className="px-4 py-3 font-medium">Empresas vinculadas</th>
+              <th className="px-4 py-3 font-medium">Empresa(s)</th>
             </tr>
           </thead>
           <tbody>
@@ -110,7 +120,10 @@ export default function AdministracaoLista({ usuariosIniciais, empresas, vinculo
                 <td className="px-4 py-3 capitalize text-base-200">{u.perfil}</td>
                 <td className="px-4 py-3 text-base-300">{u.funcao ?? '—'}</td>
                 <td className="px-4 py-3 text-base-300">
-                  {u.perfil === 'analista' ? `${empresasPorAnalista[u.id] ?? 0} / 50` : '—'}
+                  {u.perfil === 'analista' && `${empresasPorAnalista[u.id] ?? 0} / 50`}
+                  {(u.perfil === 'gestor' || u.perfil === 'operacional') &&
+                    (u.empresa_transportadora_id ? nomeEmpresaPorId[u.empresa_transportadora_id] ?? '—' : '—')}
+                  {u.perfil === 'administrador' && '—'}
                 </td>
               </tr>
             ))}
