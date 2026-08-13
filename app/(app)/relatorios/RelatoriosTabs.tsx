@@ -1,24 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { Solicitacao } from '@/lib/types';
+import { Solicitacao, TabelaServico } from '@/lib/types';
 import RelatorioOperacional from './RelatorioOperacional';
 import RelatorioFinanceiro from './RelatorioFinanceiro';
-
-interface FaixaFinanceiro {
-  id: string;
-  empresa_id: string;
-  tipo_servico: 'viagem' | 'extra';
-  valor_de: number;
-  valor_ate: number | null;
-  valor_cobrado: number;
-}
 
 interface Props {
   solicitacoes: Solicitacao[];
   empresas: { id: string; nome: string }[];
   analistas: { id: string; nome: string }[];
-  faixasFinanceiro: FaixaFinanceiro[];
+  servicosFinanceiro: TabelaServico[];
   podeVerFinanceiro: boolean;
 }
 
@@ -26,7 +17,7 @@ export default function RelatoriosTabs({
   solicitacoes,
   empresas,
   analistas,
-  faixasFinanceiro,
+  servicosFinanceiro,
   podeVerFinanceiro,
 }: Props) {
   const [aba, setAba] = useState<'operacional' | 'financeiro'>('operacional');
@@ -63,7 +54,7 @@ export default function RelatoriosTabs({
       )}
 
       {aba === 'financeiro' && podeVerFinanceiro && (
-        <RelatorioFinanceiro solicitacoes={solicitacoes} empresas={empresas} faixas={faixasFinanceiro} />
+        <RelatorioFinanceiro solicitacoes={solicitacoes} empresas={empresas} servicos={servicosFinanceiro} />
       )}
     </div>
   );

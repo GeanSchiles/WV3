@@ -37,10 +37,10 @@ export default async function RelatoriosPage() {
     .eq('perfil', 'analista')
     .order('nome');
 
-  let faixasFinanceiro: any[] = [];
+  let servicosFinanceiro: any[] = [];
   if (podeVerFinanceiro) {
-    const { data } = await supabase.from('financeiro_faixas').select('*');
-    faixasFinanceiro = data ?? [];
+    const { data } = await supabase.from('tabela_servicos').select('*');
+    servicosFinanceiro = data ?? [];
   }
 
   return (
@@ -56,7 +56,7 @@ export default async function RelatoriosPage() {
         solicitacoes={solicitacoes ?? []}
         empresas={empresas ?? []}
         analistas={analistas ?? []}
-        faixasFinanceiro={faixasFinanceiro}
+        servicosFinanceiro={servicosFinanceiro}
         podeVerFinanceiro={podeVerFinanceiro}
       />
     </div>

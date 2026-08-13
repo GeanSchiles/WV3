@@ -26,9 +26,7 @@ const TIPOS: { value: TipoServico; label: string }[] = [
 
 export default function NovaSolicitacaoModal({ empresas, perfil, onClose, onCriado }: Props) {
   const ehTransportadora = perfil === 'gestor' || perfil === 'operacional';
-  const tiposDisponiveis = ehTransportadora
-    ? TIPOS.filter((t) => t.value === 'viagem' || t.value === 'consulta')
-    : TIPOS;
+  const tiposDisponiveis = TIPOS;
 
   const supabase = createClient();
   const [tipo, setTipo] = useState<TipoServico>('viagem');

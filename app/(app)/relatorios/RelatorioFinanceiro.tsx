@@ -1,36 +1,28 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Solicitacao } from '@/lib/types';
-
-interface FaixaFinanceiro {
-  id: string;
-  empresa_id: string;
-  tipo_servico: 'viagem' | 'extra';
-  valor_de: number;
-  valor_ate: number | null;
-  valor_cobrado: number;
-}
+import { Solicitacao, TabelaServico, calcularValorPorFaixas } from '@/lib/types';
 
 interface Props {
   solicitacoes: Solicitacao[];
   empresas: { id: string; nome: string }[];
-  faixas: FaixaFinanceiro[];
-}
-
-function calcularValorViagem(valorCarga: number | null, faixasEmpresa: FaixaFinanceiro[]): number {
-  if (valorCarga == null) return 0;
-  const faixa = faixasEmpresa
-    .filter((f) => f.tipo_servico === 'viagem')
-    .find((f) => valorCarga >= f.valor_de && (f.valor_ate == null || valorCarga <= f.valor_ate));
-  return faixa?.valor_cobrado ?? 0;
+  servicos: TabelaServico[];
 }
 
 function formatarReal(valor: number) {
   return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-export default function RelatorioFinanceiro({ solicitacoes, empresas, faixas }: Props) {
+// Mapeia o tipo interno da solicitação (viagem/consulta/escolta/isca) para o
+// nome do serviço cadastrado na Tabela de Serviços (Viagem/Consulta/Escolta/Isca).
+const NOME_SERVICO_POR_TIPO: Record<string, string> = {
+  viagem: 'Viagem',
+  consulta: 'Consulta',
+  escolta: 'Escolta',
+  isca: 'Isca',
+};
+
+export default function RelatorioFinanceiro({ solicitacoes, empresas, servicos }: Props) {
   const [filtroEmpresa, setFiltroEmpresa] = useState('todas');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
@@ -38,9 +30,15 @@ export default function RelatorioFinanceiro({ solicitacoes, empresas, faixas }: 
   const linhas = useMemo(() => {
     const empresasFiltradas = filtroEmpresa === 'todas' ? empresas : empresas.filter((e) => e.id === filtroEmpresa);
 
-    return empresasFiltradas.map((empresa) => {
-      const faixasEmpresa = faixas.filter((f) => f.empresa_id === empresa.id);
-      const faixaExtra = faixasEmpresa.find((f) => f.tipo_servico === 'extra');
+    const resultado: {
+      empresa: { id: string; nome: string };
+      tipoServico: string;
+      quantidade: number;
+      valor: number;
+    }[] = [];
+
+    empresasFiltradas.forEach((empresa) => {
+      const servicosEmpresa = servicos.filter((s) => s.empresa_id === empresa.id);
 
       const solicitacoesEmpresa = solicitacoes.filter((s) => {
         if (s.empresa_id !== empresa.id) return false;
@@ -50,24 +48,34 @@ export default function RelatorioFinanceiro({ solicitacoes, empresas, faixas }: 
         return true;
       });
 
-      const viagens = solicitacoesEmpresa.filter((s) => s.tipo === 'viagem');
-      const extras = solicitacoesEmpresa.filter((s) => s.tipo !== 'viagem');
+      // agrupa nomes de serviço presentes tanto nas solicitações quanto na tabela cadastrada
+      const tiposPresentes = new Set<string>();
+      solicitacoesEmpresa.forEach((s) => tiposPresentes.add(NOME_SERVICO_POR_TIPO[s.tipo] ?? s.tipo));
 
-      const valorServicos = viagens.reduce((soma, s) => soma + calcularValorViagem(s.valor_carga, faixasEmpresa), 0);
-      const valorExtras = extras.length * (faixaExtra?.valor_cobrado ?? 0);
-
-      return {
-        empresa,
-        qtdViagens: viagens.length,
-        qtdExtras: extras.length,
-        valorServicos,
-        valorExtras,
-        total: valorServicos + valorExtras,
-      };
+      tiposPresentes.forEach((tipoServico) => {
+        const quantidade = solicitacoesEmpresa.filter(
+          (s) => (NOME_SERVICO_POR_TIPO[s.tipo] ?? s.tipo) === tipoServico
+        ).length;
+        const faixasDoServico = servicosEmpresa.filter((f) => f.tipo_servico === tipoServico);
+        const valor = calcularValorPorFaixas(quantidade, faixasDoServico);
+        resultado.push({ empresa, tipoServico, quantidade, valor });
+      });
     });
-  }, [empresas, faixas, solicitacoes, filtroEmpresa, dataInicio, dataFim]);
 
-  const totalGeral = linhas.reduce((soma, l) => soma + l.total, 0);
+    return resultado;
+  }, [empresas, servicos, solicitacoes, filtroEmpresa, dataInicio, dataFim]);
+
+  const totaisPorEmpresa = useMemo(() => {
+    const mapa: Record<string, { nome: string; total: number; qtd: number }> = {};
+    linhas.forEach((l) => {
+      if (!mapa[l.empresa.id]) mapa[l.empresa.id] = { nome: l.empresa.nome, total: 0, qtd: 0 };
+      mapa[l.empresa.id].total += l.valor;
+      mapa[l.empresa.id].qtd += l.quantidade;
+    });
+    return Object.values(mapa);
+  }, [linhas]);
+
+  const totalGeral = linhas.reduce((soma, l) => soma + l.valor, 0);
 
   return (
     <div>
@@ -94,9 +102,9 @@ export default function RelatorioFinanceiro({ solicitacoes, empresas, faixas }: 
       </div>
 
       <p className="mb-3 text-xs text-base-400">
-        Valores calculados a partir das faixas cadastradas no módulo Financeiro, aplicadas aos serviços concluídos
-        no período. Representa o valor <span className="text-base-200">a receber</span> — o controle de valores já
-        recebidos ainda não está implementado nesta versão.
+        Valores calculados a partir da Tabela de Serviços cadastrada em cada empresa (faixas por quantidade),
+        aplicada aos serviços concluídos no período. Representa o valor <span className="text-base-200">a receber</span>{' '}
+        — o controle de valores já recebidos ainda não está implementado nesta versão.
       </p>
 
       <div className="overflow-hidden rounded-lg border border-base-700">
@@ -104,36 +112,43 @@ export default function RelatorioFinanceiro({ solicitacoes, empresas, faixas }: 
           <thead>
             <tr className="border-b border-base-700 bg-base-900 text-left text-xs uppercase tracking-wide text-base-400">
               <th className="px-4 py-3 font-medium">Empresa</th>
-              <th className="px-4 py-3 font-medium">Viagens concluídas</th>
-              <th className="px-4 py-3 font-medium">Valor dos serviços</th>
-              <th className="px-4 py-3 font-medium">Serviços extras</th>
-              <th className="px-4 py-3 font-medium">Valores extras</th>
-              <th className="px-4 py-3 font-medium">Total a receber</th>
+              <th className="px-4 py-3 font-medium">Serviço</th>
+              <th className="px-4 py-3 font-medium">Quantidade concluída</th>
+              <th className="px-4 py-3 font-medium">Valor calculado</th>
             </tr>
           </thead>
           <tbody>
             {linhas.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-base-400">
-                  Nenhuma empresa encontrada.
+                <td colSpan={4} className="px-4 py-10 text-center text-base-400">
+                  Nenhum serviço concluído encontrado para os filtros selecionados.
                 </td>
               </tr>
             )}
-            {linhas.map((l) => (
-              <tr key={l.empresa.id} className="border-b border-base-800 bg-base-950 last:border-0">
+            {linhas.map((l, i) => (
+              <tr key={`${l.empresa.id}-${l.tipoServico}-${i}`} className="border-b border-base-800 bg-base-950 last:border-0">
                 <td className="px-4 py-3 text-base-100">{l.empresa.nome}</td>
-                <td className="px-4 py-3 text-base-300">{l.qtdViagens}</td>
-                <td className="px-4 py-3 text-base-200">{formatarReal(l.valorServicos)}</td>
-                <td className="px-4 py-3 text-base-300">{l.qtdExtras}</td>
-                <td className="px-4 py-3 text-base-200">{formatarReal(l.valorExtras)}</td>
-                <td className="px-4 py-3 font-medium text-base-100">{formatarReal(l.total)}</td>
+                <td className="px-4 py-3 text-base-200">{l.tipoServico}</td>
+                <td className="px-4 py-3 text-base-300">{l.quantidade}</td>
+                <td className="px-4 py-3 text-base-200">
+                  {l.valor > 0 ? formatarReal(l.valor) : <span className="text-base-500">sem faixa cadastrada</span>}
+                </td>
               </tr>
             ))}
           </tbody>
-          {linhas.length > 0 && (
+          {totaisPorEmpresa.length > 0 && (
             <tfoot>
+              {totaisPorEmpresa.map((t) => (
+                <tr key={t.nome} className="border-t border-base-800 bg-base-900">
+                  <td className="px-4 py-2 text-sm font-medium text-base-200" colSpan={2}>
+                    Subtotal — {t.nome}
+                  </td>
+                  <td className="px-4 py-2 text-sm text-base-300">{t.qtd}</td>
+                  <td className="px-4 py-2 text-sm font-medium text-base-100">{formatarReal(t.total)}</td>
+                </tr>
+              ))}
               <tr className="bg-base-900">
-                <td colSpan={5} className="px-4 py-3 text-right text-sm font-medium text-base-300">
+                <td colSpan={3} className="px-4 py-3 text-right text-sm font-medium text-base-300">
                   Total geral
                 </td>
                 <td className="px-4 py-3 text-base font-semibold text-accent">{formatarReal(totalGeral)}</td>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import {
   Solicitacao,
@@ -13,6 +13,9 @@ import {
 import NovaSolicitacaoModal from './NovaSolicitacaoModal';
 import AtendimentoDrawer from './AtendimentoDrawer';
 
+const LIMITE_VISUALIZACAO_MS = 3 * 60 * 1000;
+const TITULO_ORIGINAL = 'WV3 — Controle de Serviço';
+
 interface Props {
   solicitacoesIniciais: Solicitacao[];
   empresas: { id: string; nome: string }[];
@@ -24,6 +27,7 @@ export default function PainelOperacional({ solicitacoesIniciais, empresas, perf
   const [solicitacoes, setSolicitacoes] = useState(solicitacoesIniciais);
   const [modalAberto, setModalAberto] = useState(false);
   const [selecionada, setSelecionada] = useState<Solicitacao | null>(null);
+  const [agora, setAgora] = useState(Date.now());
 
   const [filtroStatus, setFiltroStatus] = useState<StatusServico | 'todos'>('todos');
   const [filtroTipo, setFiltroTipo] = useState<TipoServico | 'todos'>('todos');
@@ -31,12 +35,85 @@ export default function PainelOperacional({ solicitacoesIniciais, empresas, perf
   const [filtroDataInicio, setFiltroDataInicio] = useState('');
   const [filtroDataFim, setFiltroDataFim] = useState('');
 
+  // Atualiza o relógio a cada 10s para recalcular quais linhas passaram de 3 min sem visualização
+  useEffect(() => {
+    const intervalo = setInterval(() => setAgora(Date.now()), 10_000);
+    return () => clearInterval(intervalo);
+  }, []);
+
+  const idsAtrasadas = useMemo(() => {
+    const ids = new Set<string>();
+    solicitacoes.forEach((s) => {
+      if (s.status !== 'aguardando') return;
+      if (s.visualizado_em) return;
+      if (agora - new Date(s.created_at).getTime() > LIMITE_VISUALIZACAO_MS) {
+        ids.add(s.id);
+      }
+    });
+    return ids;
+  }, [solicitacoes, agora]);
+
+  // Faz o título da aba piscar quando a plataforma está minimizada/em segundo plano
+  // e existe alguma solicitação atrasada, para chamar a atenção do analista.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    let intervaloTitulo: ReturnType<typeof setInterval> | null = null;
+    let visivel = true;
+
+    function pararPiscar() {
+      if (intervaloTitulo) {
+        clearInterval(intervaloTitulo);
+        intervaloTitulo = null;
+      }
+      document.title = TITULO_ORIGINAL;
+    }
+
+    function iniciarPiscarSeNecessario() {
+      if (visivel || idsAtrasadas.size === 0 || intervaloTitulo) return;
+      let mostrandoAlerta = false;
+      intervaloTitulo = setInterval(() => {
+        document.title = mostrandoAlerta ? TITULO_ORIGINAL : '🔴 Nova solicitação pendente!';
+        mostrandoAlerta = !mostrandoAlerta;
+      }, 1000);
+    }
+
+    function aoMudarVisibilidade() {
+      visivel = document.visibilityState === 'visible';
+      if (visivel) pararPiscar();
+      else iniciarPiscarSeNecessario();
+    }
+
+    document.addEventListener('visibilitychange', aoMudarVisibilidade);
+    window.addEventListener('blur', () => {
+      visivel = false;
+      iniciarPiscarSeNecessario();
+    });
+    window.addEventListener('focus', () => {
+      visivel = true;
+      pararPiscar();
+    });
+
+    if (document.visibilityState !== 'visible') {
+      visivel = false;
+      iniciarPiscarSeNecessario();
+    }
+
+    return () => {
+      document.removeEventListener('visibilitychange', aoMudarVisibilidade);
+      pararPiscar();
+    };
+  }, [idsAtrasadas]);
+
   async function recarregar() {
     const { data } = await supabase
       .from('solicitacoes')
       .select('*, empresa:empresas_transportadoras(nome)')
       .order('created_at', { ascending: false });
     setSolicitacoes((data as Solicitacao[]) ?? []);
+  }
+
+  function marcarVisualizada(id: string, visualizadoEm: string) {
+    setSolicitacoes((prev) => prev.map((s) => (s.id === id ? { ...s, visualizado_em: visualizadoEm } : s)));
   }
 
   const filtradas = useMemo(() => {
@@ -148,7 +225,9 @@ export default function PainelOperacional({ solicitacoesIniciais, empresas, perf
               <tr
                 key={s.id}
                 onClick={() => setSelecionada(s)}
-                className="cursor-pointer border-b border-base-800 bg-base-950 last:border-0 hover:bg-base-900"
+                className={`cursor-pointer border-b border-base-800 last:border-0 hover:bg-base-900 ${
+                  idsAtrasadas.has(s.id) ? 'linha-alerta-visualizacao' : 'bg-base-950'
+                }`}
               >
                 <td className="px-4 py-3">
                   <span className={`badge-${s.status}`}>{STATUS_LABEL[s.status]}</span>
@@ -194,6 +273,7 @@ export default function PainelOperacional({ solicitacoesIniciais, empresas, perf
           solicitacao={selecionada}
           perfil={perfil}
           onClose={() => setSelecionada(null)}
+          onVisualizado={marcarVisualizada}
           onAtualizado={() => {
             setSelecionada(null);
             recarregar();

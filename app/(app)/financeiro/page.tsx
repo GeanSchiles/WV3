@@ -21,10 +21,10 @@ export default async function FinanceiroPage() {
 
   const { data: empresas } = await empresasQuery;
 
-  const { data: faixas } = await supabase
-    .from('financeiro_faixas')
+  const { data: servicos } = await supabase
+    .from('tabela_servicos')
     .select('*')
-    .order('valor_de');
+    .order('faixa_de');
 
   // Resumo: quantidade de solicitações concluídas por empresa (para dar noção de volume)
   const { data: solicitacoesConcluidas } = await supabase
@@ -48,7 +48,7 @@ export default async function FinanceiroPage() {
 
       <FinanceiroLista
         empresas={empresas ?? []}
-        faixasIniciais={faixas ?? []}
+        servicosIniciais={servicos ?? []}
         contagemPorEmpresa={contagemPorEmpresa}
         perfil={meuProfile.perfil}
       />

@@ -33,12 +33,37 @@ export interface EmpresaTransportadora {
 export interface TabelaServico {
   id: string;
   empresa_id: string;
-  nome: string;
-  valor: number;
+  tipo_servico: string;
+  faixa_de: number;
+  faixa_ate: number | null;
+  valor_unitario: number;
   created_at: string;
 }
 
 export const SERVICOS_PADRAO = ['Viagem', 'Isca', 'Consulta', 'Escolta'];
+
+// Calcula o valor total de um serviço "em bloco" (tarifa escalonada por
+// quantidade). Ex: 120 viagens com faixas [0-100 = R$100, 101-150 = R$115]
+// => 100*100 + 20*115.
+export function calcularValorPorFaixas(quantidade: number, faixas: TabelaServico[]): number {
+  if (quantidade <= 0 || faixas.length === 0) return 0;
+  const ordenadas = [...faixas].sort((a, b) => a.faixa_de - b.faixa_de);
+  let restante = quantidade;
+  let total = 0;
+  for (const f of ordenadas) {
+    if (restante <= 0) break;
+    const capacidade = f.faixa_ate != null ? f.faixa_ate - f.faixa_de + 1 : Infinity;
+    const usado = Math.min(restante, capacidade);
+    total += usado * f.valor_unitario;
+    restante -= usado;
+  }
+  // Se a quantidade ultrapassar a última faixa cadastrada, aplica o valor
+  // da última faixa para o excedente (evita "perder" o valor do serviço).
+  if (restante > 0 && ordenadas.length > 0) {
+    total += restante * ordenadas[ordenadas.length - 1].valor_unitario;
+  }
+  return total;
+}
 
 export interface FinanceiroFaixa {
   id: string;
@@ -75,6 +100,7 @@ export interface Solicitacao {
   escolta_empresa: string | null;
   isca_numero: string | null;
   motivo_cancelamento: string | null;
+  visualizado_em: string | null;
   created_at: string;
 }
 

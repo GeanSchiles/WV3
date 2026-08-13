@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { EmpresaTransportadora, TipoMotorista, SERVICOS_PADRAO } from '@/lib/types';
-import TabelaServicosModal, { LinhaServico } from './TabelaServicosModal';
+import TabelaServicosModal, { GrupoServico } from './TabelaServicosModal';
 
 interface Faixa {
   valor_de: string;
@@ -43,10 +43,19 @@ export default function EmpresaModal({ empresa, onClose, onSalvo }: Props) {
     { valor_de: '0', valor_ate: '', tipo_rastreamento: 'nao_rastreada' },
   ]);
 
-  const [servicos, setServicos] = useState<LinhaServico[]>(
-    SERVICOS_PADRAO.map((nome) => ({ nome, valor: '', padrao: true }))
+  const [servicos, setServicos] = useState<GrupoServico[]>(
+    SERVICOS_PADRAO.map((tipo_servico) => ({
+      tipo_servico,
+      padrao: true,
+      faixas: [{ faixa_de: '0', faixa_ate: '', valor_unitario: '' }],
+    }))
   );
   const [modalServicosAberto, setModalServicosAberto] = useState(false);
+
+  const [apoliceId, setApoliceId] = useState<string | null>(null);
+  const [apoliceArquivoAtual, setApoliceArquivoAtual] = useState<string | null>(null);
+  const [arquivoApolice, setArquivoApolice] = useState<File | null>(null);
+  const [enviandoApolice, setEnviandoApolice] = useState(false);
 
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -58,26 +67,56 @@ export default function EmpresaModal({ empresa, onClose, onSalvo }: Props) {
         .from('tabela_servicos')
         .select('*')
         .eq('empresa_id', empresa.id)
-        .order('created_at');
+        .order('faixa_de');
 
       if (data && data.length > 0) {
-        const doBanco: LinhaServico[] = data.map((s) => ({
-          id: s.id,
-          nome: s.nome,
-          valor: String(s.valor),
-          padrao: SERVICOS_PADRAO.includes(s.nome),
-        }));
+        const grupos: GrupoServico[] = [];
+        data.forEach((s) => {
+          let grupo = grupos.find((g) => g.tipo_servico === s.tipo_servico);
+          if (!grupo) {
+            grupo = { tipo_servico: s.tipo_servico, padrao: SERVICOS_PADRAO.includes(s.tipo_servico), faixas: [] };
+            grupos.push(grupo);
+          }
+          grupo.faixas.push({
+            id: s.id,
+            faixa_de: String(s.faixa_de),
+            faixa_ate: s.faixa_ate != null ? String(s.faixa_ate) : '',
+            valor_unitario: String(s.valor_unitario),
+          });
+        });
         // garante que os serviços padrão apareçam mesmo que ainda não tenham sido cadastrados
-        SERVICOS_PADRAO.forEach((nome) => {
-          if (!doBanco.some((s) => s.nome === nome)) {
-            doBanco.unshift({ nome, valor: '', padrao: true });
+        SERVICOS_PADRAO.forEach((tipo_servico) => {
+          if (!grupos.some((g) => g.tipo_servico === tipo_servico)) {
+            grupos.unshift({ tipo_servico, padrao: true, faixas: [{ faixa_de: '0', faixa_ate: '', valor_unitario: '' }] });
           }
         });
-        setServicos(doBanco);
+        setServicos(grupos);
+      }
+
+      const { data: apoliceExistente } = await supabase
+        .from('apolices')
+        .select('id, arquivo_url')
+        .eq('empresa_id', empresa.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (apoliceExistente) {
+        setApoliceId(apoliceExistente.id);
+        setApoliceArquivoAtual(apoliceExistente.arquivo_url);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresa?.id]);
+
+  async function abrirApoliceAtual() {
+    if (!apoliceArquivoAtual) return;
+    const { data, error } = await supabase.storage
+      .from('apolices-empresas')
+      .createSignedUrl(apoliceArquivoAtual, 60);
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+    else if (error) setErro('Erro ao abrir apólice: ' + error.message);
+  }
 
   function atualizarFaixa(i: number, campo: keyof Faixa, valor: string) {
     setFaixas((prev) => prev.map((f, idx) => (idx === i ? { ...f, [campo]: valor } : f)));
@@ -171,9 +210,22 @@ export default function EmpresaModal({ empresa, onClose, onSalvo }: Props) {
       }
     }
 
-    // Tabela de serviços — substitui os valores cadastrados pelo conjunto atual
-    const servicosValidos = servicos.filter((s) => s.nome.trim() !== '' && s.valor !== '');
-    if (servicosValidos.length > 0 && empresaId) {
+    // Tabela de serviços — substitui as faixas cadastradas pelo conjunto atual
+    const linhasParaInserir: { empresa_id: string; tipo_servico: string; faixa_de: number; faixa_ate: number | null; valor_unitario: number }[] = [];
+    servicos.forEach((g) => {
+      g.faixas
+        .filter((f) => f.faixa_de !== '' && f.valor_unitario !== '')
+        .forEach((f) => {
+          linhasParaInserir.push({
+            empresa_id: empresaId!,
+            tipo_servico: g.tipo_servico.trim(),
+            faixa_de: Number(f.faixa_de),
+            faixa_ate: f.faixa_ate ? Number(f.faixa_ate) : null,
+            valor_unitario: Number(f.valor_unitario),
+          });
+        });
+    });
+    if (linhasParaInserir.length > 0 && empresaId) {
       const { error: erroDeleteServicos } = await supabase
         .from('tabela_servicos')
         .delete()
@@ -184,18 +236,59 @@ export default function EmpresaModal({ empresa, onClose, onSalvo }: Props) {
         return;
       }
 
-      const { error: erroServicos } = await supabase.from('tabela_servicos').insert(
-        servicosValidos.map((s) => ({
-          empresa_id: empresaId,
-          nome: s.nome.trim(),
-          valor: Number(s.valor),
-        }))
-      );
+      const { error: erroServicos } = await supabase.from('tabela_servicos').insert(linhasParaInserir);
       if (erroServicos) {
         setSalvando(false);
         setErro('Empresa salva, mas houve erro ao salvar a tabela de serviços: ' + erroServicos.message);
         return;
       }
+    }
+
+    // Anexo da apólice de seguro
+    if (arquivoApolice && empresaId) {
+      setEnviandoApolice(true);
+      const extensao = arquivoApolice.name.split('.').pop();
+      const caminho = `${empresaId}/apolice-${Date.now()}.${extensao}`;
+
+      const { error: erroUploadApolice } = await supabase.storage
+        .from('apolices-empresas')
+        .upload(caminho, arquivoApolice, { upsert: true });
+
+      if (erroUploadApolice) {
+        setEnviandoApolice(false);
+        setSalvando(false);
+        setErro('Empresa salva, mas houve erro ao enviar a apólice: ' + erroUploadApolice.message);
+        return;
+      }
+
+      if (apoliceId) {
+        const { error: erroUpdateApolice } = await supabase
+          .from('apolices')
+          .update({ arquivo_url: caminho })
+          .eq('id', apoliceId);
+        if (erroUpdateApolice) {
+          setEnviandoApolice(false);
+          setSalvando(false);
+          setErro('Empresa salva, mas houve erro ao vincular a apólice: ' + erroUpdateApolice.message);
+          return;
+        }
+      } else {
+        const { error: erroInsertApolice } = await supabase.from('apolices').insert({
+          empresa_id: empresaId,
+          arquivo_url: caminho,
+          tipos_contratacao: tiposContratacao,
+          tipo_mercadoria_geral: mercadoriaGeral,
+          tipo_mercadoria_especifica: mercadoriaEspecifica,
+        });
+        if (erroInsertApolice) {
+          setEnviandoApolice(false);
+          setSalvando(false);
+          setErro('Empresa salva, mas houve erro ao vincular a apólice: ' + erroInsertApolice.message);
+          return;
+        }
+      }
+
+      setEnviandoApolice(false);
     }
 
     const faixasValidas = faixas.filter((f) => f.valor_de !== '');
@@ -255,9 +348,9 @@ export default function EmpresaModal({ empresa, onClose, onSalvo }: Props) {
                 <path d="M3 9h18M9 9v11" />
               </svg>
               Tabela de Serviços
-              {servicos.some((s) => s.valor !== '') && (
+              {servicos.some((g) => g.faixas.some((f) => f.valor_unitario !== '')) && (
                 <span className="ml-0.5 rounded-full bg-accent/15 px-1.5 text-[10px] text-accent">
-                  {servicos.filter((s) => s.valor !== '').length}
+                  {servicos.reduce((soma, g) => soma + g.faixas.filter((f) => f.valor_unitario !== '').length, 0)}
                 </span>
               )}
             </button>
@@ -289,6 +382,27 @@ export default function EmpresaModal({ empresa, onClose, onSalvo }: Props) {
                 />
               </div>
               {enviandoLogo && <p className="mt-1 text-[11px] text-base-400">Enviando logo…</p>}
+            </div>
+
+            <div>
+              <label className="label">Apólice de seguro (anexo)</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="file"
+                  accept="application/pdf,image/*"
+                  className="input"
+                  onChange={(e) => setArquivoApolice(e.target.files?.[0] ?? null)}
+                />
+                {apoliceArquivoAtual && !arquivoApolice && (
+                  <button type="button" onClick={abrirApoliceAtual} className="btn-ghost whitespace-nowrap text-xs">
+                    Ver anexo atual
+                  </button>
+                )}
+              </div>
+              {arquivoApolice && (
+                <p className="mt-1 text-[11px] text-base-400">Selecionado: {arquivoApolice.name}</p>
+              )}
+              {enviandoApolice && <p className="mt-1 text-[11px] text-base-400">Enviando apólice…</p>}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -447,10 +561,10 @@ export default function EmpresaModal({ empresa, onClose, onSalvo }: Props) {
       {modalServicosAberto && (
         <TabelaServicosModal
           nomeEmpresa={nome || 'Nova empresa'}
-          servicos={servicos}
+          grupos={servicos}
           onFechar={() => setModalServicosAberto(false)}
-          onSalvar={(novosServicos) => {
-            setServicos(novosServicos);
+          onSalvar={(novosGrupos) => {
+            setServicos(novosGrupos);
             setModalServicosAberto(false);
           }}
         />

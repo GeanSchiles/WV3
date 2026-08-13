@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Solicitacao, TIPO_SERVICO_LABEL, STATUS_LABEL, PerfilUsuario } from '@/lib/types';
 
@@ -9,9 +9,10 @@ interface Props {
   perfil: PerfilUsuario;
   onClose: () => void;
   onAtualizado: () => void;
+  onVisualizado?: (id: string, visualizadoEm: string) => void;
 }
 
-export default function AtendimentoDrawer({ solicitacao, perfil, onClose, onAtualizado }: Props) {
+export default function AtendimentoDrawer({ solicitacao, perfil, onClose, onAtualizado, onVisualizado }: Props) {
   const ehTransportadora = perfil === 'gestor' || perfil === 'operacional';
   const supabase = createClient();
   const [salvando, setSalvando] = useState(false);
@@ -26,6 +27,20 @@ export default function AtendimentoDrawer({ solicitacao, perfil, onClose, onAtua
   const [escoltaEmpresa, setEscoltaEmpresa] = useState(solicitacao.escolta_empresa ?? '');
 
   const [iscaNumero, setIscaNumero] = useState(solicitacao.isca_numero ?? '');
+
+  // Marca a solicitação como visualizada assim que o analista abre o atendimento
+  // (encerra o alerta de "não visualizado em 3 minutos" do Painel Operacional).
+  useEffect(() => {
+    if (solicitacao.visualizado_em) return;
+    const agora = new Date().toISOString();
+    onVisualizado?.(solicitacao.id, agora);
+    supabase
+      .from('solicitacoes')
+      .update({ visualizado_em: agora })
+      .eq('id', solicitacao.id)
+      .then(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [solicitacao.id]);
 
   async function salvar(concluir: boolean) {
     setErro(null);
