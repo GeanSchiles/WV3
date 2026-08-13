@@ -39,14 +39,24 @@ export default function NovaSolicitacaoModal({ empresas, perfil, onClose, onCria
   const [produto, setProduto] = useState('');
   const [valorCarga, setValorCarga] = useState('');
   const [tipoMotorista, setTipoMotorista] = useState<TipoMotorista>('frota');
-  const [anexosConfirmados, setAnexosConfirmados] = useState<Record<string, boolean>>({});
+  const [arquivosAnexos, setArquivosAnexos] = useState<Record<string, File>>({});
+  const [enviandoAnexos, setEnviandoAnexos] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
   const anexosNecessarios =
     tipo === 'viagem' ? anexosObrigatoriosViagem(tipoMotorista) : tipo === 'consulta' ? ANEXOS_CONSULTA : [];
 
-  const anexosPendentes = anexosNecessarios.filter((a) => !anexosConfirmados[a]);
+  const anexosPendentes = anexosNecessarios.filter((a) => !arquivosAnexos[a]);
+
+  function selecionarAnexo(documento: string, arquivo: File | null) {
+    setArquivosAnexos((prev) => {
+      const novo = { ...prev };
+      if (arquivo) novo[documento] = arquivo;
+      else delete novo[documento];
+      return novo;
+    });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -86,14 +96,62 @@ export default function NovaSolicitacaoModal({ empresas, perfil, onClose, onCria
       Object.assign(payload, { tipo_motorista: tipoMotorista });
     }
 
-    const { error } = await supabase.from('solicitacoes').insert(payload);
+    const { data: novaSolicitacao, error } = await supabase
+      .from('solicitacoes')
+      .insert(payload)
+      .select('id')
+      .single();
 
-    setSalvando(false);
-
-    if (error) {
-      setErro('Não foi possível salvar a solicitação: ' + error.message);
+    if (error || !novaSolicitacao) {
+      setSalvando(false);
+      setErro('Não foi possível salvar a solicitação: ' + (error?.message ?? ''));
       return;
     }
+
+    // Upload dos documentos anexados (Supabase Storage)
+    const documentos = Object.entries(arquivosAnexos);
+    if (documentos.length > 0) {
+      setEnviandoAnexos(true);
+      const anexosSalvos: { documento: string; arquivo_url: string }[] = [];
+
+      for (const [documento, arquivo] of documentos) {
+        const extensao = arquivo.name.split('.').pop();
+        const slug = documento
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]+/g, '-');
+        const caminho = `${empresaId}/${novaSolicitacao.id}/${slug}-${Date.now()}.${extensao}`;
+
+        const { error: erroUpload } = await supabase.storage
+          .from('anexos-solicitacoes')
+          .upload(caminho, arquivo, { upsert: true });
+
+        if (erroUpload) {
+          setEnviandoAnexos(false);
+          setSalvando(false);
+          setErro(`Solicitação salva, mas houve erro ao enviar "${documento}": ` + erroUpload.message);
+          return;
+        }
+
+        anexosSalvos.push({ documento, arquivo_url: caminho });
+      }
+
+      const { error: erroAnexos } = await supabase
+        .from('solicitacoes')
+        .update({ anexos: anexosSalvos })
+        .eq('id', novaSolicitacao.id);
+
+      setEnviandoAnexos(false);
+
+      if (erroAnexos) {
+        setSalvando(false);
+        setErro('Solicitação salva, mas houve erro ao vincular os anexos: ' + erroAnexos.message);
+        return;
+      }
+    }
+
+    setSalvando(false);
 
     onCriado();
   }
@@ -215,24 +273,23 @@ export default function NovaSolicitacaoModal({ empresas, perfil, onClose, onCria
           {anexosNecessarios.length > 0 && (
             <div className="rounded-md border border-base-600 bg-base-800 p-3">
               <p className="label mb-2">Anexos obrigatórios</p>
-              <div className="space-y-1.5">
+              <div className="space-y-2.5">
                 {anexosNecessarios.map((doc) => (
-                  <label key={doc} className="flex items-center gap-2 text-sm text-base-200">
+                  <div key={doc}>
+                    <label className="mb-1 block text-xs text-base-200">{doc}</label>
                     <input
-                      type="checkbox"
-                      checked={!!anexosConfirmados[doc]}
-                      onChange={(e) =>
-                        setAnexosConfirmados((prev) => ({ ...prev, [doc]: e.target.checked }))
-                      }
+                      type="file"
+                      accept="application/pdf,image/*"
+                      className="input text-xs"
+                      onChange={(e) => selecionarAnexo(doc, e.target.files?.[0] ?? null)}
                     />
-                    {doc}
-                  </label>
+                    {arquivosAnexos[doc] && (
+                      <p className="mt-0.5 text-[11px] text-ok">✓ {arquivosAnexos[doc].name}</p>
+                    )}
+                  </div>
                 ))}
               </div>
-              <p className="mt-2 text-[11px] text-base-400">
-                Upload dos arquivos fica disponível assim que o Supabase Storage estiver configurado.
-                Por ora, confirme aqui que os documentos foram recebidos.
-              </p>
+              {enviandoAnexos && <p className="mt-2 text-[11px] text-base-300">Enviando anexos…</p>}
             </div>
           )}
 

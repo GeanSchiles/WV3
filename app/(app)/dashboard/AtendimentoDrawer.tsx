@@ -42,6 +42,12 @@ export default function AtendimentoDrawer({ solicitacao, perfil, onClose, onAtua
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [solicitacao.id]);
 
+  async function abrirAnexo(caminho: string) {
+    const { data, error } = await supabase.storage.from('anexos-solicitacoes').createSignedUrl(caminho, 60);
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+    else if (error) setErro('Erro ao abrir anexo: ' + error.message);
+  }
+
   async function salvar(concluir: boolean) {
     setErro(null);
     setSalvando(true);
@@ -136,6 +142,25 @@ export default function AtendimentoDrawer({ solicitacao, perfil, onClose, onAtua
             }
           />
         </div>
+
+        {solicitacao.anexos && solicitacao.anexos.length > 0 && (
+          <div className="mb-5 rounded-md border border-base-700 bg-base-800 p-4">
+            <p className="label mb-2">Documentos anexados</p>
+            <div className="space-y-1.5">
+              {solicitacao.anexos.map((a, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => abrirAnexo(a.arquivo_url)}
+                  className="flex w-full items-center justify-between rounded-sm border border-base-600 px-2.5 py-1.5 text-left text-xs text-base-200 hover:border-accent/50 hover:text-accent"
+                >
+                  {a.documento}
+                  <span>Abrir ↗</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {!ehTransportadora && solicitacao.status !== 'cancelada' && (
           <div className="space-y-4">

@@ -101,6 +101,7 @@ export interface Solicitacao {
   isca_numero: string | null;
   motivo_cancelamento: string | null;
   visualizado_em: string | null;
+  anexos: { documento: string; arquivo_url: string }[] | null;
   created_at: string;
 }
 

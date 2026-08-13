@@ -12,6 +12,7 @@ import {
 } from '@/lib/types';
 import NovaSolicitacaoModal from './NovaSolicitacaoModal';
 import AtendimentoDrawer from './AtendimentoDrawer';
+import { obterFavicons, definirFavicon } from '@/lib/favicon';
 
 const LIMITE_VISUALIZACAO_MS = 3 * 60 * 1000;
 const TITULO_ORIGINAL = 'WV3 — Controle de Serviço';
@@ -53,26 +54,34 @@ export default function PainelOperacional({ solicitacoesIniciais, empresas, perf
     return ids;
   }, [solicitacoes, agora]);
 
-  // Faz o título da aba piscar quando a plataforma está minimizada/em segundo plano
-  // e existe alguma solicitação atrasada, para chamar a atenção do analista.
+  // Faz o título da aba e o ícone (favicon) piscarem quando a plataforma está
+  // minimizada/em segundo plano e existe alguma solicitação atrasada, para
+  // chamar a atenção do analista mesmo com a janela fora de foco.
   useEffect(() => {
     if (typeof document === 'undefined') return;
-    let intervaloTitulo: ReturnType<typeof setInterval> | null = null;
+    let intervaloAlerta: ReturnType<typeof setInterval> | null = null;
     let visivel = true;
+    let favicons: { normal: string; alerta: string } | null = null;
+
+    obterFavicons()
+      .then((f) => (favicons = f))
+      .catch(() => {});
 
     function pararPiscar() {
-      if (intervaloTitulo) {
-        clearInterval(intervaloTitulo);
-        intervaloTitulo = null;
+      if (intervaloAlerta) {
+        clearInterval(intervaloAlerta);
+        intervaloAlerta = null;
       }
       document.title = TITULO_ORIGINAL;
+      if (favicons) definirFavicon(favicons.normal);
     }
 
     function iniciarPiscarSeNecessario() {
-      if (visivel || idsAtrasadas.size === 0 || intervaloTitulo) return;
+      if (visivel || idsAtrasadas.size === 0 || intervaloAlerta) return;
       let mostrandoAlerta = false;
-      intervaloTitulo = setInterval(() => {
+      intervaloAlerta = setInterval(() => {
         document.title = mostrandoAlerta ? TITULO_ORIGINAL : '🔴 Nova solicitação pendente!';
+        if (favicons) definirFavicon(mostrandoAlerta ? favicons.normal : favicons.alerta);
         mostrandoAlerta = !mostrandoAlerta;
       }, 1000);
     }
@@ -83,15 +92,19 @@ export default function PainelOperacional({ solicitacoesIniciais, empresas, perf
       else iniciarPiscarSeNecessario();
     }
 
-    document.addEventListener('visibilitychange', aoMudarVisibilidade);
-    window.addEventListener('blur', () => {
+    function aoPerderFoco() {
       visivel = false;
       iniciarPiscarSeNecessario();
-    });
-    window.addEventListener('focus', () => {
+    }
+
+    function aoGanharFoco() {
       visivel = true;
       pararPiscar();
-    });
+    }
+
+    document.addEventListener('visibilitychange', aoMudarVisibilidade);
+    window.addEventListener('blur', aoPerderFoco);
+    window.addEventListener('focus', aoGanharFoco);
 
     if (document.visibilityState !== 'visible') {
       visivel = false;
@@ -100,6 +113,8 @@ export default function PainelOperacional({ solicitacoesIniciais, empresas, perf
 
     return () => {
       document.removeEventListener('visibilitychange', aoMudarVisibilidade);
+      window.removeEventListener('blur', aoPerderFoco);
+      window.removeEventListener('focus', aoGanharFoco);
       pararPiscar();
     };
   }, [idsAtrasadas]);
